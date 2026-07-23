@@ -1,0 +1,76 @@
+:root {
+  color: #17212b;
+  background: #f4f6f8;
+  font-family:
+    Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --surface: #ffffff;
+  --surface-muted: #f7f9fa;
+  --border: #dce2e7;
+  --text: #17212b;
+  --muted: #6f7d89;
+  --success: #168765;
+  --danger: #c94646;
+  --warning: #b97716;
+  --el-color-primary: #167d73;
+  --el-color-success: #168765;
+  --el-color-danger: #c94646;
+  --el-color-warning: #b97716;
+  --el-border-radius-base: 5px;
+  --el-border-radius-small: 4px;
+  --el-font-size-base: 13px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-width: 0;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: #f4f6f8;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.el-button svg {
+  flex: 0 0 auto;
+}
+
+.el-button > span {
+  gap: 6px;
+}
+
+.el-table {
+  --el-table-header-bg-color: #f7f9fa;
+  --el-table-row-hover-bg-color: #f1f7f5;
+  --el-table-border-color: #e7ebee;
+  color: var(--text);
+}
+
+.el-table th.el-table__cell {
+  color: #52616d;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.el-dialog {
+  border-radius: 7px;
+}
+
+.el-alert {
+  border-radius: 6px;
+}

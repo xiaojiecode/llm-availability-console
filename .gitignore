@@ -1,0 +1,15 @@
+data/
+monitor.exe
+web/node_modules/
+cmd/monitor/web/dist/
+work/smoke-data/
+work/
+outputs/
+.idea/
+*.exe
+*.db
+*.db-*
+*.key
+.env
+.env.*
+.lucen-import.json
