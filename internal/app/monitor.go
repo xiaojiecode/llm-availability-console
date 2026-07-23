@@ -11,7 +11,6 @@ type Monitor struct {
 	store *Store
 	stop  chan struct{}
 	wg    sync.WaitGroup
-	runMu sync.Mutex
 }
 
 func NewMonitor(store *Store) *Monitor {
@@ -42,8 +41,6 @@ func (m *Monitor) Stop() {
 }
 
 func (m *Monitor) RunChannel(ctx context.Context, id int64) (ProbeView, error) {
-	m.runMu.Lock()
-	defer m.runMu.Unlock()
 	channel, apiKey, err := m.store.GetChannel(ctx, id)
 	if err != nil {
 		return ProbeView{}, err
@@ -73,7 +70,6 @@ func (m *Monitor) runAll() {
 		return
 	}
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 4)
 	for _, channel := range channels {
 		if !channel.Enabled {
 			continue
@@ -82,8 +78,6 @@ func (m *Monitor) runAll() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
 			if _, err := m.RunChannel(ctx, channel.ID); err != nil {
 				log.Printf("probe channel %d: %v", channel.ID, err)
 			}
