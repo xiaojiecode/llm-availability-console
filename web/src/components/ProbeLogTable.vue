@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { CircleCheck, CircleX } from '@lucide/vue'
 import type { Channel, Probe } from '../types'
+import { localizeErrorMessage } from '../utils/errorMessage'
 
 const props = defineProps<{
   channels: Channel[]
@@ -23,7 +25,7 @@ function formatTime(value: string) {
 </script>
 
 <template>
-  <el-table :data="probes" row-key="id" height="360" empty-text="暂无探测记录">
+  <el-table class="probe-table" :data="probes" row-key="id" height="360" empty-text="暂无探测记录">
     <el-table-column label="时间" width="158">
       <template #default="{ row }">{{ formatTime(row.checkedAt) }}</template>
     </el-table-column>
@@ -33,6 +35,8 @@ function formatTime(value: string) {
     <el-table-column label="结果" width="86">
       <template #default="{ row }">
         <el-tag :type="row.success ? 'success' : 'danger'" effect="light" size="small">
+          <CircleCheck v-if="row.success" :size="12" />
+          <CircleX v-else :size="12" />
           {{ row.success ? '成功' : '失败' }}
         </el-tag>
       </template>
@@ -45,13 +49,23 @@ function formatTime(value: string) {
     </el-table-column>
     <el-table-column label="错误" min-width="300" show-overflow-tooltip>
       <template #default="{ row }">
-        <span :class="{ 'error-text': row.error }">{{ row.error || '--' }}</span>
+        <span :class="{ 'error-text': row.error }">{{ row.error ? localizeErrorMessage(row.error, '探测失败') : '--' }}</span>
       </template>
     </el-table-column>
   </el-table>
 </template>
 
 <style scoped>
+.probe-table {
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.probe-table :deep(.el-tag) {
+  gap: 4px;
+}
+
 .error-text {
   color: var(--danger);
 }

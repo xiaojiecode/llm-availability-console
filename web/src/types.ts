@@ -1,4 +1,15 @@
-export type Provider = 'openai' | 'anthropic'
+export type Provider = 'openai' | 'anthropic' | 'custom'
+
+export type SortField = 'comprehensive' | 'current' | 'availability' | 'latency'
+
+export type RequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+
+export interface RequestTemplate {
+  method: RequestMethod
+  path: string
+  headersJson: string
+  bodyJson: string
+}
 
 export interface Probe {
   id: number
@@ -7,24 +18,17 @@ export interface Probe {
   statusCode: number
   latencyMs: number
   error: string
+  warning: string
+  requestBody: string
   responseExcerpt: string
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  cachedTokens: number
+  reasoningTokens: number
+  billedAmount?: number
+  billingCurrency: string
   checkedAt: string
-}
-
-export interface Channel {
-  id: number
-  name: string
-  provider: Provider
-  baseUrl: string
-  model: string
-  enabled: boolean
-  apiKeySet: boolean
-  note: string
-  createdAt: string
-  updatedAt: string
-  lastProbe?: Probe
-  availability: number
-  probeCount24h: number
 }
 
 export interface ChannelInput {
@@ -35,6 +39,22 @@ export interface ChannelInput {
   model: string
   enabled: boolean
   note: string
+  rateMultiplier: number
+  proxyUrl: string
+  requestTemplate: RequestTemplate
+}
+
+export interface StoredChannel extends ChannelInput {
+  id: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Channel extends StoredChannel {
+  lastProbe?: Probe
+  availability: number
+  probeCount24h: number
+  successCount24h: number
 }
 
 export interface Summary {
@@ -50,5 +70,27 @@ export interface SeriesPoint {
   bucket: string
   successRate: number
   avgLatencyMs: number
+  observedAvgLatencyMs: number
   probeCount: number
+  latestProbe?: Probe
+}
+
+export interface MonitorSettings {
+  autoProbeEnabled: boolean
+  autoProbeIntervalMs: number
+}
+
+export interface MonitorBackup {
+  schemaVersion: 1
+  exportedAt: string
+  channels: StoredChannel[]
+  probes: Probe[]
+  settings: MonitorSettings
+}
+
+export type ImportMode = 'merge' | 'replace'
+
+export interface ImportResult {
+  channels: number
+  probes: number
 }

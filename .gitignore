@@ -1,7 +1,7 @@
 data/
 monitor.exe
 web/node_modules/
-cmd/monitor/web/dist/
+web/dist/
 work/smoke-data/
 work/
 outputs/
@@ -12,4 +12,3 @@ outputs/
 *.key
 .env
 .env.*
-.lucen-import.json

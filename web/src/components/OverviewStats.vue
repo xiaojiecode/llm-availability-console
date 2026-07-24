@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Activity, Gauge, RadioTower, ShieldCheck } from '@lucide/vue'
-import type { Component } from 'vue'
+import { computed, type Component } from 'vue'
 import type { Summary } from '../types'
 
 const props = defineProps<{ summary: Summary }>()
@@ -18,7 +18,7 @@ function formatLatency(value: number) {
   return value ? Math.round(value) + ' ms' : '--'
 }
 
-const items = (): StatItem[] => [
+const items = computed<StatItem[]>(() => [
   {
     key: 'channels',
     label: '启用信道',
@@ -37,9 +37,9 @@ const items = (): StatItem[] => [
   },
   {
     key: 'availability',
-    label: '24h 可用率',
-    value: props.summary.recentAvailability.toFixed(1) + '%',
-    meta: '全部已记录请求',
+    label: '24h 综合可用率',
+    value: props.summary.totalChannels ? props.summary.recentAvailability.toFixed(2) + '%' : '--',
+    meta: '全部已启用信道',
     icon: Activity,
     tone: 'amber',
   },
@@ -51,12 +51,12 @@ const items = (): StatItem[] => [
     icon: Gauge,
     tone: 'red',
   },
-]
+])
 </script>
 
 <template>
   <div class="stats-grid">
-    <article v-for="item in items()" :key="item.key" class="stat-tile">
+    <article v-for="item in items" :key="item.key" class="stat-tile">
       <div :class="['stat-icon', 'stat-icon--' + item.tone]">
         <component :is="item.icon" :size="20" />
       </div>
@@ -73,19 +73,41 @@ const items = (): StatItem[] => [
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .stat-tile {
+  position: relative;
   display: flex;
   min-width: 0;
-  min-height: 116px;
+  min-height: 126px;
   align-items: flex-start;
   gap: 14px;
-  padding: 20px;
+  overflow: hidden;
+  padding: 20px 18px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--surface);
+  box-shadow: 0 12px 30px var(--section-shadow);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.stat-tile::after {
+  position: absolute;
+  right: -18px;
+  bottom: -32px;
+  width: 84px;
+  height: 84px;
+  border: 1px solid var(--border-soft);
+  border-radius: 50%;
+  content: '';
+  opacity: 0.58;
+}
+
+.stat-tile:hover {
+  border-color: var(--hover-border);
+  box-shadow: 0 18px 38px var(--card-shadow);
+  transform: translateY(-3px);
 }
 
 .stat-icon {
@@ -94,27 +116,32 @@ const items = (): StatItem[] => [
   height: 38px;
   flex: 0 0 38px;
   place-items: center;
-  border-radius: 6px;
+  border-radius: 7px;
+  transition: transform 220ms ease;
+}
+
+.stat-tile:hover .stat-icon {
+  transform: scale(1.06) rotate(-3deg);
 }
 
 .stat-icon--teal {
-  color: #176f78;
-  background: #e2f2f3;
+  color: var(--stat-teal);
+  background: var(--stat-teal-bg);
 }
 
 .stat-icon--green {
-  color: #167551;
-  background: #e4f3eb;
+  color: var(--stat-green);
+  background: var(--stat-green-bg);
 }
 
 .stat-icon--amber {
-  color: #a36a12;
-  background: #f8eed8;
+  color: var(--stat-amber);
+  background: var(--stat-amber-bg);
 }
 
 .stat-icon--red {
-  color: #ad4141;
-  background: #f9e5e3;
+  color: var(--stat-red);
+  background: var(--stat-red-bg);
 }
 
 .stat-copy {
@@ -132,8 +159,7 @@ const items = (): StatItem[] => [
 .stat-value {
   overflow-wrap: anywhere;
   color: var(--text);
-  font-size: 25px;
-  font-weight: 650;
+  font: 700 25px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
   line-height: 1.2;
 }
 
