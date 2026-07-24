@@ -5,10 +5,10 @@ import vm from 'node:vm'
 
 const sourceUrl = new URL('../web/public/llmping.user.js', import.meta.url)
 
-function createRuntime(requestHandler = () => {}) {
+function createRuntime(requestHandler = () => {}, { isolated = false } = {}) {
   const listeners = new Map()
   const posted = []
-  const window = {
+  const pageWindow = {
     location: { origin: 'https://xiaojiecode.github.io' },
     addEventListener(type, listener) {
       listeners.set(type, listener)
@@ -17,8 +17,12 @@ function createRuntime(requestHandler = () => {}) {
       posted.push({ message, origin })
     },
   }
+  const sandboxWindow = isolated
+    ? { ...pageWindow, location: { ...pageWindow.location } }
+    : pageWindow
   const context = vm.createContext({
-    window,
+    window: sandboxWindow,
+    ...(isolated ? { unsafeWindow: pageWindow } : {}),
     URL,
     Error,
     Set,
@@ -31,7 +35,7 @@ function createRuntime(requestHandler = () => {}) {
     context,
     posted,
     dispatch(data) {
-      listeners.get('message')?.({ source: window, origin: window.location.origin, data })
+      listeners.get('message')?.({ source: pageWindow, origin: pageWindow.location.origin, data })
     },
   }
 }
@@ -39,8 +43,25 @@ function createRuntime(requestHandler = () => {}) {
 test('油猴脚本声明跨域权限并覆盖线上观测台', async () => {
   const source = await readFile(sourceUrl, 'utf8')
   assert.match(source, /@grant\s+GM_xmlhttpRequest/)
+  assert.match(source, /@grant\s+unsafeWindow/)
+  assert.match(source, /@sandbox\s+JavaScript/)
   assert.match(source, /@connect\s+\*/)
   assert.match(source, /@match\s+https:\/\/xiaojiecode\.github\.io\/llm-availability-console\/\*/)
+})
+
+test('在 Tampermonkey 隔离沙箱中通过页面窗口完成握手', async () => {
+  const source = await readFile(sourceUrl, 'utf8')
+  const runtime = createRuntime(undefined, { isolated: true })
+  vm.runInContext(source, runtime.context)
+  const postedBeforePing = runtime.posted.length
+
+  runtime.dispatch({
+    source: 'llmping-page',
+    type: 'LLMPING_USERSCRIPT_PING',
+  })
+
+  assert.equal(runtime.posted.length, postedBeforePing + 1)
+  assert.equal(runtime.posted.at(-1).message.type, 'LLMPING_USERSCRIPT_READY')
 })
 
 test('通过 GM_xmlhttpRequest 转发原始 HTTP 请求', async () => {

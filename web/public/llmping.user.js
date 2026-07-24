@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LLM 信道观测台跨域请求桥
 // @namespace    https://github.com/xiaojiecode/llm-availability-console
-// @version      0.2.0
+// @version      0.2.1
 // @description  使用油猴扩展为 LLM 信道观测台提供 HTTP/HTTPS 跨域请求能力。
 // @author       xiaojiecode
 // @match        https://xiaojiecode.github.io/llm-availability-console/*
@@ -9,6 +9,8 @@
 // @match        http://127.0.0.1/*
 // @connect      *
 // @grant        GM_xmlhttpRequest
+// @grant        unsafeWindow
+// @sandbox      JavaScript
 // @run-at       document-start
 // @downloadURL  https://xiaojiecode.github.io/llm-availability-console/llmping.user.js
 // @updateURL    https://xiaojiecode.github.io/llm-availability-console/llmping.user.js
@@ -22,6 +24,7 @@
   const REQUEST_TIMEOUT_MS = 15_000
   const MAX_BODY_LENGTH = 2 * 1024 * 1024
   const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+  const pageWindow = typeof unsafeWindow === 'undefined' ? window : unsafeWindow
   const BLOCKED_HEADERS = new Set([
     'connection',
     'content-length',
@@ -34,7 +37,7 @@
   ])
 
   function postToPage(message) {
-    window.postMessage({ source: USERSCRIPT_SOURCE, ...message }, window.location.origin)
+    pageWindow.postMessage({ source: USERSCRIPT_SOURCE, ...message }, pageWindow.location.origin)
   }
 
   function sanitizeHeaders(value) {
@@ -111,8 +114,8 @@
     })
   }
 
-  window.addEventListener('message', (event) => {
-    if (event.source !== window || event.origin !== window.location.origin) return
+  pageWindow.addEventListener('message', (event) => {
+    if (event.source !== pageWindow || event.origin !== pageWindow.location.origin) return
     const message = event.data
     if (!message || message.source !== PAGE_SOURCE) return
 
