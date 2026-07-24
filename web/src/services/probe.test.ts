@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ChannelInput } from '../types'
 import { defaultProviderValues } from './requestTemplates'
-import { buildProbeRequest, normalizeProxyUrl, validateRequestTemplate } from './probe'
+import { buildProbeRequest, normalizeProxyUrl, performProbe, validateRequestTemplate } from './probe'
 
 function channel(overrides: Partial<ChannelInput> = {}): ChannelInput & { id: number } {
   const defaults = defaultProviderValues('openai')
@@ -42,6 +42,25 @@ describe('request templates', () => {
     expect(request.url).toBe(
       'https://proxy.example.com/?url=https%3A%2F%2Fapi.openai.com%2Fv1%2Fchat%2Fcompletions',
     )
+  })
+
+  it('prefers the browser extension and sends it the original target URL', async () => {
+    const extensionFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: '{"usage":{"total_tokens":2}}',
+    })
+
+    const result = await performProbe(channel({
+      proxyUrl: 'https://proxy.example.com/?url={{url}}',
+    }), { fetch: extensionFetch })
+
+    expect(extensionFetch).toHaveBeenCalledWith(expect.objectContaining({
+      url: 'https://api.openai.com/v1/chat/completions',
+      method: 'POST',
+    }))
+    expect(result.success).toBe(true)
+    expect(result.totalTokens).toBe(2)
   })
 
   it('includes the Anthropic direct-browser header', () => {

@@ -1,5 +1,6 @@
 import { computed, onMounted, onUnmounted, shallowRef } from 'vue'
 import type { ChannelInput, ImportMode, MonitorBackup, Probe, SeriesPoint, SortField, StoredChannel, Summary } from '../types'
+import { useBrowserExtension } from './useBrowserExtension'
 import { buildChannelViews, buildSeriesByChannel, buildSummary, sortChannels } from '../services/metrics'
 import { performProbe } from '../services/probe'
 import { normalizeProxyUrl } from '../services/probe'
@@ -30,6 +31,7 @@ function uniqueProbes(...groups: Probe[][]) {
 }
 
 export function useDashboard() {
+  const browserExtension = useBrowserExtension()
   const storedChannels = shallowRef<StoredChannel[]>([])
   const channelViews = shallowRef(buildChannelViews([], []))
   const summary = shallowRef<Summary>({ ...emptySummary })
@@ -203,6 +205,7 @@ export function useDashboard() {
     autoProbeSaving,
     autoProbeIntervalMs,
     globalProxyUrl,
+    extensionStatus: browserExtension.status,
     errorMessage,
     loadBase,
     saveChannel,
@@ -211,6 +214,7 @@ export function useDashboard() {
     probeAll,
     setAutoProbe,
     setGlobalProxyUrl,
+    checkExtension: browserExtension.recheck,
     exportBackup,
     importBackup,
   }

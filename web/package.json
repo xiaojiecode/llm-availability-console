@@ -8,6 +8,7 @@
     "build": "vite build",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
+    "test:extension": "node --test ../extension/background.test.mjs",
     "test:worker": "node --test ../worker/src/index.test.mjs"
   },
   "dependencies": {

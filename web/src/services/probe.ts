@@ -1,4 +1,10 @@
 import type { ChannelInput, Probe, RequestTemplate } from '../types'
+import {
+  BrowserExtensionUnavailableError,
+  browserExtensionBridge,
+  type ExtensionFetchInput,
+  type ExtensionFetchResponse,
+} from './browserExtension'
 
 interface TemplateContext {
   apiKey: string
@@ -11,6 +17,10 @@ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string
 
 const RESPONSE_LIMIT = 2_048
 const REQUEST_TIMEOUT_MS = 15_000
+
+export interface ProbeExtensionClient {
+  fetch(input: ExtensionFetchInput): Promise<ExtensionFetchResponse>
+}
 
 export function parseJsonObject(raw: string, label: string): Record<string, JsonValue> {
   let value: unknown
@@ -137,15 +147,36 @@ function responseError(status: number, raw: string) {
   return raw.trim() || `HTTP ${status}`
 }
 
-export async function performProbe(channel: ChannelInput & { id: number }): Promise<Omit<Probe, 'id'>> {
+export async function performProbe(
+  channel: ChannelInput & { id: number },
+  extensionClient: ProbeExtensionClient = browserExtensionBridge,
+): Promise<Omit<Probe, 'id'>> {
   const request = buildProbeRequest(channel)
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   const startedAt = performance.now()
   const checkedAt = new Date().toISOString()
+  let transport: 'extension' | 'proxy' | 'direct' = 'extension'
   try {
-    const response = await fetch(request.url, { ...request.init, signal: controller.signal })
-    const raw = (await response.text()).slice(0, RESPONSE_LIMIT)
+    let response: ExtensionFetchResponse
+    try {
+      response = await extensionClient.fetch({
+        url: request.targetUrl,
+        method: request.init.method,
+        headers: request.init.headers,
+        body: request.init.body,
+      })
+    } catch (error) {
+      if (!(error instanceof BrowserExtensionUnavailableError)) throw error
+      transport = channel.proxyUrl ? 'proxy' : 'direct'
+      const browserResponse = await fetch(request.url, { ...request.init, signal: controller.signal })
+      response = {
+        ok: browserResponse.ok,
+        status: browserResponse.status,
+        body: await browserResponse.text(),
+      }
+    }
+    const raw = response.body.slice(0, RESPONSE_LIMIT)
     let payload: unknown
     try {
       payload = JSON.parse(raw)
@@ -170,9 +201,11 @@ export async function performProbe(channel: ChannelInput & { id: number }): Prom
     const aborted = error instanceof DOMException && error.name === 'AbortError'
     const message = aborted
       ? `请求超过 ${REQUEST_TIMEOUT_MS / 1_000} 秒`
-      : channel.proxyUrl
+      : transport === 'extension'
+        ? `浏览器扩展请求失败：${error instanceof Error ? error.message : '网络错误'}`
+        : transport === 'proxy'
         ? `代理请求失败：${error instanceof Error ? error.message : '网络错误'}`
-        : '浏览器无法访问目标地址，可能被 CORS 或网络策略拦截；请为该信道配置代理 URL'
+        : '浏览器无法访问目标地址，可能被 CORS 或网络策略拦截；请安装请求桥扩展或配置代理 URL'
     return {
       channelId: channel.id,
       success: false,
