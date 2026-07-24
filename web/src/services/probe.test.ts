@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ChannelInput } from '../types'
 import { defaultProviderValues } from './requestTemplates'
-import { buildProbeRequest, validateRequestTemplate } from './probe'
+import { buildProbeRequest, normalizeProxyUrl, validateRequestTemplate } from './probe'
 
 function channel(overrides: Partial<ChannelInput> = {}): ChannelInput & { id: number } {
   const defaults = defaultProviderValues('openai')
@@ -22,6 +22,10 @@ function channel(overrides: Partial<ChannelInput> = {}): ChannelInput & { id: nu
 }
 
 describe('request templates', () => {
+  it('validates unified proxy URL templates', () => {
+    expect(normalizeProxyUrl(' https://proxy.example/?url={{url}} ')).toBe('https://proxy.example/?url={{url}}')
+    expect(() => normalizeProxyUrl('https://proxy.example/')).toThrow('必须包含 {{url}}')
+  })
   it('replaces variables in OpenAI headers and body', () => {
     const request = buildProbeRequest(channel())
 

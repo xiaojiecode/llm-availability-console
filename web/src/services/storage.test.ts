@@ -6,8 +6,10 @@ import {
   listChannels,
   listRecentProbes,
   monitorDb,
+  loadSettings,
   saveChannel,
   saveProbe,
+  saveSettings,
 } from './storage'
 
 const defaults = defaultProviderValues('openai')
@@ -76,5 +78,16 @@ describe('IndexedDB storage', () => {
     expect((await listChannels())[0].id).toBe(created.id)
     expect((await listChannels())[0].name).toBe('restored')
     expect(await listRecentProbes()).toEqual([])
+  })
+
+  it('persists the unified proxy setting in backups', async () => {
+    await saveSettings({
+      autoProbeEnabled: false,
+      autoProbeIntervalMs: 60_000,
+      globalProxyUrl: 'https://proxy.example/?url={{url}}',
+    })
+
+    expect((await loadSettings()).globalProxyUrl).toContain('{{url}}')
+    expect((await exportBackup()).settings.globalProxyUrl).toContain('{{url}}')
   })
 })

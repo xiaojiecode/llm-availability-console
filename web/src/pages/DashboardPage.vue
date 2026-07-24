@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, shallowRef, useTemplateRef } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Activity, Download, Plus, RefreshCcw, RotateCw, Sparkles, Upload } from '@lucide/vue'
+import { Activity, Download, Plus, RefreshCcw, RotateCw, ShieldCheck, Sparkles, Upload } from '@lucide/vue'
 import ChannelDialog from '../components/ChannelDialog.vue'
 import ChannelCards from '../components/ChannelCards.vue'
 import DataImportDialog from '../components/DataImportDialog.vue'
@@ -9,6 +9,7 @@ import MetricsChart from '../components/MetricsChart.vue'
 import NetworkScene from '../components/NetworkScene.vue'
 import OverviewStats from '../components/OverviewStats.vue'
 import ProbeLogTable from '../components/ProbeLogTable.vue'
+import ProxySettingsDialog from '../components/ProxySettingsDialog.vue'
 import { useDashboard } from '../composables/useDashboard'
 import { useDashboardMotion } from '../composables/useDashboardMotion'
 import type { Channel, ChannelInput, ImportMode, SortField } from '../types'
@@ -21,6 +22,8 @@ const channelView = shallowRef<'enabled' | 'all' | 'disabled'>('enabled')
 const importDialogOpen = shallowRef(false)
 const importBusy = shallowRef(false)
 const mergeChannelGroups = shallowRef(true)
+const proxyDialogOpen = shallowRef(false)
+const proxySaving = shallowRef(false)
 const shellRef = useTemplateRef<HTMLElement>('shell')
 
 useDashboardMotion(shellRef)
@@ -162,6 +165,19 @@ async function importData(payload: unknown, mode: ImportMode) {
     importBusy.value = false
   }
 }
+
+async function saveGlobalProxy(value: string) {
+  proxySaving.value = true
+  try {
+    await dashboard.setGlobalProxyUrl(value)
+    proxyDialogOpen.value = false
+    ElMessage.success(value ? '统一代理已保存' : '统一代理已关闭')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '代理设置保存失败')
+  } finally {
+    proxySaving.value = false
+  }
+}
 </script>
 
 <template>
@@ -208,6 +224,10 @@ async function importData(payload: unknown, mode: ImportMode) {
             <el-button @click="importDialogOpen = true">
               <Upload :size="16" />
               导入
+            </el-button>
+            <el-button @click="proxyDialogOpen = true">
+              <ShieldCheck :size="16" />
+              跨域代理
             </el-button>
             <el-button @click="exportData">
               <Download :size="16" />
@@ -336,6 +356,14 @@ async function importData(payload: unknown, mode: ImportMode) {
       :importing="importBusy"
       @close="importDialogOpen = false"
       @import="importData"
+    />
+
+    <ProxySettingsDialog
+      :open="proxyDialogOpen"
+      :value="dashboard.globalProxyUrl.value"
+      :saving="proxySaving"
+      @close="proxyDialogOpen = false"
+      @save="saveGlobalProxy"
     />
   </div>
 </template>

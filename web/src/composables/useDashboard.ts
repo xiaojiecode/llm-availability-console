@@ -2,6 +2,7 @@ import { computed, onMounted, onUnmounted, shallowRef } from 'vue'
 import type { ChannelInput, ImportMode, MonitorBackup, Probe, SeriesPoint, SortField, StoredChannel, Summary } from '../types'
 import { buildChannelViews, buildSeriesByChannel, buildSummary, sortChannels } from '../services/metrics'
 import { performProbe } from '../services/probe'
+import { normalizeProxyUrl } from '../services/probe'
 import {
   deleteChannel as deleteStoredChannel,
   exportBackup as createBackup,
@@ -43,6 +44,7 @@ export function useDashboard() {
   const autoProbeEnabled = shallowRef(false)
   const autoProbeSaving = shallowRef(false)
   const autoProbeIntervalMs = shallowRef(60_000)
+  const globalProxyUrl = shallowRef('')
   const errorMessage = shallowRef('')
 
   const channels = computed(() => sortChannels(channelViews.value, sortBy.value, sortOrder.value))
@@ -67,6 +69,7 @@ export function useDashboard() {
       channelSeries.value = buildSeriesByChannel(nextChannels, probes24h)
       autoProbeEnabled.value = settings.autoProbeEnabled
       autoProbeIntervalMs.value = settings.autoProbeIntervalMs
+      globalProxyUrl.value = settings.globalProxyUrl
       if (selectedChannelId.value && !nextChannels.some((item) => item.id === selectedChannelId.value)) {
         selectedChannelId.value = 0
       }
@@ -98,7 +101,10 @@ export function useDashboard() {
   async function runProbe(id: number) {
     const channel = await getChannel(id)
     if (!channel) throw new Error('信道不存在')
-    const outcome = await performProbe(channel)
+    const outcome = await performProbe({
+      ...channel,
+      proxyUrl: channel.proxyUrl || globalProxyUrl.value,
+    })
     return saveProbe(outcome)
   }
 
@@ -134,12 +140,26 @@ export function useDashboard() {
     autoProbeSaving.value = true
     try {
       autoProbeEnabled.value = enabled
-      await saveSettings({ autoProbeEnabled: enabled, autoProbeIntervalMs: autoProbeIntervalMs.value })
+      await saveSettings({
+        autoProbeEnabled: enabled,
+        autoProbeIntervalMs: autoProbeIntervalMs.value,
+        globalProxyUrl: globalProxyUrl.value,
+      })
       restartAutoProbeTimer()
       if (enabled) void probeAll()
     } finally {
       autoProbeSaving.value = false
     }
+  }
+
+  async function setGlobalProxyUrl(value: string) {
+    const normalized = normalizeProxyUrl(value)
+    await saveSettings({
+      autoProbeEnabled: autoProbeEnabled.value,
+      autoProbeIntervalMs: autoProbeIntervalMs.value,
+      globalProxyUrl: normalized,
+    })
+    globalProxyUrl.value = normalized
   }
 
   async function exportBackup(): Promise<MonitorBackup> {
@@ -182,6 +202,7 @@ export function useDashboard() {
     autoProbeEnabled,
     autoProbeSaving,
     autoProbeIntervalMs,
+    globalProxyUrl,
     errorMessage,
     loadBase,
     saveChannel,
@@ -189,6 +210,7 @@ export function useDashboard() {
     probeChannel,
     probeAll,
     setAutoProbe,
+    setGlobalProxyUrl,
     exportBackup,
     importBackup,
   }

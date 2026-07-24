@@ -54,6 +54,14 @@ export function resolveRequestUrl(channel: Pick<ChannelInput, 'baseUrl' | 'proxy
   return channel.proxyUrl.split('{{url}}').join(encodeURIComponent(targetUrl))
 }
 
+export function normalizeProxyUrl(value: string) {
+  const normalized = value.trim()
+  if (normalized && !normalized.includes('{{url}}')) {
+    throw new Error('代理 URL 必须包含 {{url}} 占位符')
+  }
+  return normalized
+}
+
 export function validateRequestTemplate(template: RequestTemplate) {
   if (!template.path.trim()) throw new Error('请求路径不能为空')
   parseJsonObject(template.headersJson, 'Headers')

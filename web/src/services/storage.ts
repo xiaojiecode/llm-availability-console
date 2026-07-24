@@ -8,7 +8,7 @@ import type {
   StoredChannel,
   ChannelInput,
 } from '../types'
-import { validateRequestTemplate } from './probe'
+import { normalizeProxyUrl, validateRequestTemplate } from './probe'
 
 interface SettingRecord {
   key: string
@@ -35,6 +35,7 @@ export const monitorDb = new MonitorDatabase()
 const defaultSettings: MonitorSettings = {
   autoProbeEnabled: false,
   autoProbeIntervalMs: 60_000,
+  globalProxyUrl: '',
 }
 
 function withoutId<T extends { id: number }>(value: T): Omit<T, 'id'> {
@@ -50,7 +51,7 @@ function normalizeChannelInput(input: ChannelInput): ChannelInput {
     apiKey: input.apiKey.trim(),
     model: input.model.trim(),
     note: input.note.trim(),
-    proxyUrl: input.proxyUrl.trim(),
+    proxyUrl: normalizeProxyUrl(input.proxyUrl),
     rateMultiplier: Number.isFinite(input.rateMultiplier) && input.rateMultiplier > 0 ? input.rateMultiplier : 1,
     requestTemplate: { ...input.requestTemplate, path: input.requestTemplate.path.trim() },
   }
@@ -58,9 +59,6 @@ function normalizeChannelInput(input: ChannelInput): ChannelInput {
     throw new Error('请填写信道名称、Base URL 和模型')
   }
   if (!/^https?:\/\//i.test(normalized.baseUrl)) throw new Error('Base URL 必须以 http:// 或 https:// 开头')
-  if (normalized.proxyUrl && !normalized.proxyUrl.includes('{{url}}')) {
-    throw new Error('代理 URL 必须包含 {{url}} 占位符')
-  }
   validateRequestTemplate(normalized.requestTemplate)
   return normalized
 }
