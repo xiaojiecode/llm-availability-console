@@ -5,6 +5,7 @@ import { Activity, Download, Plus, RefreshCcw, RotateCw, ShieldCheck, Sparkles, 
 import ChannelDialog from '../components/ChannelDialog.vue'
 import ChannelCards from '../components/ChannelCards.vue'
 import DataImportDialog from '../components/DataImportDialog.vue'
+import UserscriptHelpDialog from '../components/UserscriptHelpDialog.vue'
 import UserscriptStatus from '../components/UserscriptStatus.vue'
 import MetricsChart from '../components/MetricsChart.vue'
 import NetworkScene from '../components/NetworkScene.vue'
@@ -25,6 +26,7 @@ const importBusy = shallowRef(false)
 const mergeChannelGroups = shallowRef(true)
 const proxyDialogOpen = shallowRef(false)
 const proxySaving = shallowRef(false)
+const userscriptHelpOpen = shallowRef(false)
 const shellRef = useTemplateRef<HTMLElement>('shell')
 
 useDashboardMotion(shellRef)
@@ -203,6 +205,7 @@ async function saveGlobalProxy(value: string) {
             <UserscriptStatus
               :status="dashboard.userscriptStatus.value"
               @recheck="dashboard.checkUserscript"
+              @show-help="userscriptHelpOpen = true"
             />
             <label class="auto-probe-control">
               <span class="live-dot" :class="{ 'live-dot--paused': !dashboard.autoProbeEnabled.value }" />
@@ -369,6 +372,11 @@ async function saveGlobalProxy(value: string) {
       :saving="proxySaving"
       @close="proxyDialogOpen = false"
       @save="saveGlobalProxy"
+    />
+
+    <UserscriptHelpDialog
+      :open="userscriptHelpOpen"
+      @close="userscriptHelpOpen = false"
     />
   </div>
 </template>
