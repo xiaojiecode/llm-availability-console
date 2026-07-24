@@ -1,10 +1,10 @@
 import type { ChannelInput, Probe, RequestTemplate } from '../types'
 import {
-  BrowserExtensionUnavailableError,
-  browserExtensionBridge,
-  type ExtensionFetchInput,
-  type ExtensionFetchResponse,
-} from './browserExtension'
+  UserscriptUnavailableError,
+  userscriptBridge,
+  type UserscriptFetchInput,
+  type UserscriptFetchResponse,
+} from './userscript'
 
 interface TemplateContext {
   apiKey: string
@@ -18,8 +18,8 @@ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string
 const RESPONSE_LIMIT = 2_048
 const REQUEST_TIMEOUT_MS = 15_000
 
-export interface ProbeExtensionClient {
-  fetch(input: ExtensionFetchInput): Promise<ExtensionFetchResponse>
+export interface ProbeUserscriptClient {
+  fetch(input: UserscriptFetchInput): Promise<UserscriptFetchResponse>
 }
 
 export function parseJsonObject(raw: string, label: string): Record<string, JsonValue> {
@@ -149,25 +149,25 @@ function responseError(status: number, raw: string) {
 
 export async function performProbe(
   channel: ChannelInput & { id: number },
-  extensionClient: ProbeExtensionClient = browserExtensionBridge,
+  userscriptClient: ProbeUserscriptClient = userscriptBridge,
 ): Promise<Omit<Probe, 'id'>> {
   const request = buildProbeRequest(channel)
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   const startedAt = performance.now()
   const checkedAt = new Date().toISOString()
-  let transport: 'extension' | 'proxy' | 'direct' = 'extension'
+  let transport: 'userscript' | 'proxy' | 'direct' = 'userscript'
   try {
-    let response: ExtensionFetchResponse
+    let response: UserscriptFetchResponse
     try {
-      response = await extensionClient.fetch({
+      response = await userscriptClient.fetch({
         url: request.targetUrl,
         method: request.init.method,
         headers: request.init.headers,
         body: request.init.body,
       })
     } catch (error) {
-      if (!(error instanceof BrowserExtensionUnavailableError)) throw error
+      if (!(error instanceof UserscriptUnavailableError)) throw error
       transport = channel.proxyUrl ? 'proxy' : 'direct'
       const browserResponse = await fetch(request.url, { ...request.init, signal: controller.signal })
       response = {
@@ -201,11 +201,11 @@ export async function performProbe(
     const aborted = error instanceof DOMException && error.name === 'AbortError'
     const message = aborted
       ? `请求超过 ${REQUEST_TIMEOUT_MS / 1_000} 秒`
-      : transport === 'extension'
-        ? `浏览器扩展请求失败：${error instanceof Error ? error.message : '网络错误'}`
+      : transport === 'userscript'
+        ? `油猴跨域请求失败：${error instanceof Error ? error.message : '网络错误'}`
         : transport === 'proxy'
         ? `代理请求失败：${error instanceof Error ? error.message : '网络错误'}`
-        : '浏览器无法访问目标地址，可能被 CORS 或网络策略拦截；请安装请求桥扩展或配置代理 URL'
+        : '浏览器无法访问目标地址，可能被 CORS 或网络策略拦截；请安装油猴跨域请求桥或配置代理 URL'
     return {
       channelId: channel.id,
       success: false,

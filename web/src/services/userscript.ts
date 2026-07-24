@@ -1,13 +1,13 @@
-export type BrowserExtensionStatus = 'checking' | 'connected' | 'unavailable'
+export type UserscriptStatus = 'checking' | 'connected' | 'unavailable'
 
-export interface ExtensionFetchInput {
+export interface UserscriptFetchInput {
   url: string
   method: string
   headers: Record<string, string>
   body?: string
 }
 
-export interface ExtensionFetchResponse {
+export interface UserscriptFetchResponse {
   ok: boolean
   status: number
   body: string
@@ -15,33 +15,33 @@ export interface ExtensionFetchResponse {
 
 interface BridgeResponse {
   ok: boolean
-  response?: ExtensionFetchResponse
+  response?: UserscriptFetchResponse
   error?: string
 }
 
 interface PendingRequest {
-  resolve: (response: ExtensionFetchResponse) => void
+  resolve: (response: UserscriptFetchResponse) => void
   reject: (error: Error) => void
   timeout: number
 }
 
 const PAGE_SOURCE = 'llmping-page'
-const EXTENSION_SOURCE = 'llmping-extension'
+const USERSCRIPT_SOURCE = 'llmping-userscript'
 
-export class BrowserExtensionUnavailableError extends Error {
+export class UserscriptUnavailableError extends Error {
   constructor() {
-    super('浏览器扩展未连接')
-    this.name = 'BrowserExtensionUnavailableError'
+    super('油猴扩展未连接')
+    this.name = 'UserscriptUnavailableError'
   }
 }
 
-export class BrowserExtensionBridge {
-  private status: BrowserExtensionStatus = 'checking'
+export class UserscriptBridge {
+  private status: UserscriptStatus = 'checking'
   private started = false
   private sequence = 0
   private checkTimeout?: number
   private connectionPromise?: Promise<boolean>
-  private readonly listeners = new Set<(status: BrowserExtensionStatus) => void>()
+  private readonly listeners = new Set<(status: UserscriptStatus) => void>()
   private readonly pending = new Map<string, PendingRequest>()
 
   constructor(
@@ -50,7 +50,7 @@ export class BrowserExtensionBridge {
     private readonly requestTimeoutMs = 17_000,
   ) {}
 
-  private setStatus(status: BrowserExtensionStatus) {
+  private setStatus(status: UserscriptStatus) {
     if (this.status === status) return
     this.status = status
     for (const listener of this.listeners) listener(status)
@@ -59,22 +59,22 @@ export class BrowserExtensionBridge {
   private readonly handleMessage = (event: MessageEvent) => {
     if (event.source !== this.targetWindow || event.origin !== this.targetWindow.location.origin) return
     const message = event.data as { source?: string; type?: string; requestId?: string; payload?: BridgeResponse }
-    if (message?.source !== EXTENSION_SOURCE) return
+    if (message?.source !== USERSCRIPT_SOURCE) return
 
-    if (message.type === 'LLMPING_EXTENSION_READY') {
+    if (message.type === 'LLMPING_USERSCRIPT_READY') {
       if (this.checkTimeout) this.targetWindow.clearTimeout(this.checkTimeout)
       this.setStatus('connected')
       return
     }
 
-    if (message.type !== 'LLMPING_EXTENSION_RESPONSE' || !message.requestId) return
+    if (message.type !== 'LLMPING_USERSCRIPT_RESPONSE' || !message.requestId) return
     const request = this.pending.get(message.requestId)
     if (!request) return
     this.pending.delete(message.requestId)
     this.targetWindow.clearTimeout(request.timeout)
     const payload = message.payload
     if (payload?.ok && payload.response) request.resolve(payload.response)
-    else request.reject(new Error(payload?.error || '浏览器扩展请求失败'))
+    else request.reject(new Error(payload?.error || '油猴跨域请求失败'))
   }
 
   start() {
@@ -92,14 +92,14 @@ export class BrowserExtensionBridge {
     if (this.checkTimeout) this.targetWindow.clearTimeout(this.checkTimeout)
     for (const request of this.pending.values()) {
       this.targetWindow.clearTimeout(request.timeout)
-      request.reject(new Error('扩展连接已关闭'))
+      request.reject(new Error('油猴连接已关闭'))
     }
     this.pending.clear()
   }
 
   recheck() {
     this.setStatus('checking')
-    this.targetWindow.postMessage({ source: PAGE_SOURCE, type: 'LLMPING_EXTENSION_PING' }, this.targetWindow.location.origin)
+    this.targetWindow.postMessage({ source: PAGE_SOURCE, type: 'LLMPING_USERSCRIPT_PING' }, this.targetWindow.location.origin)
     if (this.checkTimeout) this.targetWindow.clearTimeout(this.checkTimeout)
     this.checkTimeout = this.targetWindow.setTimeout(() => this.setStatus('unavailable'), this.handshakeTimeoutMs)
   }
@@ -108,7 +108,7 @@ export class BrowserExtensionBridge {
     return this.status
   }
 
-  subscribe(listener: (status: BrowserExtensionStatus) => void) {
+  subscribe(listener: (status: UserscriptStatus) => void) {
     this.listeners.add(listener)
     listener(this.status)
     return () => {
@@ -137,20 +137,20 @@ export class BrowserExtensionBridge {
     return this.connectionPromise
   }
 
-  async fetch(input: ExtensionFetchInput): Promise<ExtensionFetchResponse> {
+  async fetch(input: UserscriptFetchInput): Promise<UserscriptFetchResponse> {
     if (!this.started) this.start()
-    if (!await this.waitForConnection()) throw new BrowserExtensionUnavailableError()
+    if (!await this.waitForConnection()) throw new UserscriptUnavailableError()
 
     const requestId = `probe-${Date.now()}-${++this.sequence}`
-    return new Promise<ExtensionFetchResponse>((resolve, reject) => {
+    return new Promise<UserscriptFetchResponse>((resolve, reject) => {
       const timeout = this.targetWindow.setTimeout(() => {
         this.pending.delete(requestId)
-        reject(new Error('等待浏览器扩展响应超时'))
+        reject(new Error('等待油猴跨域请求响应超时'))
       }, this.requestTimeoutMs)
       this.pending.set(requestId, { resolve, reject, timeout })
       this.targetWindow.postMessage({
         source: PAGE_SOURCE,
-        type: 'LLMPING_EXTENSION_FETCH',
+        type: 'LLMPING_USERSCRIPT_FETCH',
         requestId,
         payload: input,
       }, this.targetWindow.location.origin)
@@ -158,4 +158,4 @@ export class BrowserExtensionBridge {
   }
 }
 
-export const browserExtensionBridge = new BrowserExtensionBridge(window)
+export const userscriptBridge = new UserscriptBridge(window)

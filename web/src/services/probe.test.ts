@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ChannelInput } from '../types'
 import { defaultProviderValues } from './requestTemplates'
 import { buildProbeRequest, normalizeProxyUrl, performProbe, validateRequestTemplate } from './probe'
+import { UserscriptUnavailableError } from './userscript'
 
 function channel(overrides: Partial<ChannelInput> = {}): ChannelInput & { id: number } {
   const defaults = defaultProviderValues('openai')
@@ -44,8 +45,8 @@ describe('request templates', () => {
     )
   })
 
-  it('prefers the browser extension and sends it the original target URL', async () => {
-    const extensionFetch = vi.fn().mockResolvedValue({
+  it('uses the userscript bridge by default and sends it the original target URL', async () => {
+    const userscriptFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       body: '{"usage":{"total_tokens":2}}',
@@ -53,14 +54,28 @@ describe('request templates', () => {
 
     const result = await performProbe(channel({
       proxyUrl: 'https://proxy.example.com/?url={{url}}',
-    }), { fetch: extensionFetch })
+    }), { fetch: userscriptFetch })
 
-    expect(extensionFetch).toHaveBeenCalledWith(expect.objectContaining({
+    expect(userscriptFetch).toHaveBeenCalledWith(expect.objectContaining({
       url: 'https://api.openai.com/v1/chat/completions',
       method: 'POST',
     }))
     expect(result.success).toBe(true)
     expect(result.totalTokens).toBe(2)
+  })
+
+  it('falls back to the configured CORS proxy when the userscript is unavailable', async () => {
+    const fetchMock = vi.spyOn(window, 'fetch').mockResolvedValue(new Response('{"ok":true}', { status: 200 }))
+
+    const result = await performProbe(channel({
+      proxyUrl: 'https://proxy.example.com/?url={{url}}',
+    }), { fetch: vi.fn().mockRejectedValue(new UserscriptUnavailableError()) })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('https://proxy.example.com/?url='),
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(result.success).toBe(true)
   })
 
   it('includes the Anthropic direct-browser header', () => {

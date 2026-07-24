@@ -5,7 +5,7 @@ import { Activity, Download, Plus, RefreshCcw, RotateCw, ShieldCheck, Sparkles, 
 import ChannelDialog from '../components/ChannelDialog.vue'
 import ChannelCards from '../components/ChannelCards.vue'
 import DataImportDialog from '../components/DataImportDialog.vue'
-import ExtensionStatus from '../components/ExtensionStatus.vue'
+import UserscriptStatus from '../components/UserscriptStatus.vue'
 import MetricsChart from '../components/MetricsChart.vue'
 import NetworkScene from '../components/NetworkScene.vue'
 import OverviewStats from '../components/OverviewStats.vue'
@@ -200,9 +200,9 @@ async function saveGlobalProxy(value: string) {
             </div>
           </div>
           <div class="header-actions">
-            <ExtensionStatus
-              :status="dashboard.extensionStatus.value"
-              @recheck="dashboard.checkExtension"
+            <UserscriptStatus
+              :status="dashboard.userscriptStatus.value"
+              @recheck="dashboard.checkUserscript"
             />
             <label class="auto-probe-control">
               <span class="live-dot" :class="{ 'live-dot--paused': !dashboard.autoProbeEnabled.value }" />
