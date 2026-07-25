@@ -193,16 +193,19 @@ function responseContent(point: SeriesPoint) {
 }
 
 .latency-chart__bar--success {
-  background: var(--chart-success);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--chart-success) 34%, transparent);
+  background-color: #087f5b;
+  background-color: var(--chart-success, #087f5b);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--chart-success, #087f5b) 34%, transparent);
 }
 
 .latency-chart__bar--warning {
-  background: var(--chart-warning);
+  background-color: #a86408;
+  background-color: var(--chart-warning, #a86408);
 }
 
 .latency-chart__bar--danger {
-  background: var(--chart-danger);
+  background-color: #c23d3d;
+  background-color: var(--chart-danger, #c23d3d);
 }
 
 @keyframes bar-rise {
