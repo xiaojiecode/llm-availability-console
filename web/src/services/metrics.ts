@@ -1,6 +1,7 @@
 import type { Channel, Probe, SeriesPoint, SortField, StoredChannel, Summary } from '../types'
 
 const DAY_MS = 24 * 60 * 60 * 1_000
+const HOUR_MS = 60 * 60 * 1_000
 
 function round(value: number, digits = 2) {
   const factor = 10 ** digits
@@ -18,13 +19,18 @@ export function buildChannelViews(storedChannels: StoredChannel[], probes: Probe
   return storedChannels.map((channel) => {
     const channelProbes = probes.filter((probe) => probe.channelId === channel.id)
     const recent = channelProbes.filter((probe) => new Date(probe.checkedAt).getTime() >= since)
+    const recentHour = channelProbes.filter((probe) => new Date(probe.checkedAt).getTime() >= now - HOUR_MS)
     const successCount24h = recent.filter((probe) => probe.success).length
+    const successCount1h = recentHour.filter((probe) => probe.success).length
     return {
       ...channel,
       lastProbe: latestProbe(channelProbes),
       availability: recent.length ? round((successCount24h / recent.length) * 100) : 0,
       probeCount24h: recent.length,
       successCount24h,
+      availability1h: recentHour.length ? round((successCount1h / recentHour.length) * 100) : 0,
+      probeCount1h: recentHour.length,
+      successCount1h,
     }
   })
 }

@@ -55,6 +55,8 @@ describe('dashboard metrics', () => {
     const series = buildSeriesByChannel([channel], probes, now)
 
     expect(views[0].availability).toBe(66.67)
+    expect(views[0].availability1h).toBe(66.67)
+    expect(views[0].probeCount1h).toBe(3)
     expect(views[0].lastProbe?.id).toBe(3)
     expect(summary.recentAvailability).toBe(66.67)
     expect(summary.averageLatencyMs).toBe(150)

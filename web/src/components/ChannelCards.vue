@@ -115,6 +115,15 @@ function selectCard(id: number) {
 
           <div class="channel-metrics">
             <div class="channel-metric">
+              <span>1h 可用率</span>
+              <strong :class="{ 'metric-good': channel.probeCount1h && channel.availability1h >= 99 }">
+                {{ channel.probeCount1h ? channel.availability1h.toFixed(2) + '%' : '--' }}
+              </strong>
+              <small v-if="channel.probeCount1h">
+                {{ channel.successCount1h }} / {{ channel.probeCount1h }} 次成功
+              </small>
+            </div>
+            <div class="channel-metric">
               <span>24h 可用率</span>
               <strong :class="{ 'metric-good': channel.probeCount24h && channel.availability >= 99 }">
                 {{ formatAvailability(channel) }}
@@ -384,7 +393,7 @@ function selectCard(id: number) {
 
 .channel-metrics {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   padding: 14px 0;
   border-top: 1px solid var(--border-soft);

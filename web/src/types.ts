@@ -55,6 +55,9 @@ export interface Channel extends StoredChannel {
   availability: number
   probeCount24h: number
   successCount24h: number
+  availability1h: number
+  probeCount1h: number
+  successCount1h: number
 }
 
 export interface Summary {
