@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LLM 信道观测台跨域请求桥
 // @namespace    https://github.com/xiaojiecode/llm-availability-console
-// @version      0.2.1
+// @version      0.2.2
 // @description  使用油猴扩展为 LLM 信道观测台提供 HTTP/HTTPS 跨域请求能力。
 // @author       xiaojiecode
 // @match        https://xiaojiecode.github.io/llm-availability-console/*
@@ -81,37 +81,68 @@
       return
     }
 
-    GM_xmlhttpRequest({
-      method: request.method,
-      url: request.url,
-      headers: request.headers,
-      data: request.body,
-      anonymous: true,
-      timeout: REQUEST_TIMEOUT_MS,
-      onload(response) {
-        postToPage({
-          type: 'LLMPING_USERSCRIPT_RESPONSE',
-          requestId,
-          payload: {
-            ok: true,
-            response: {
-              ok: response.status >= 200 && response.status < 300,
-              status: response.status,
-              body: response.responseText || '',
-            },
-          },
-        })
-      },
-      onabort() {
-        sendError(requestId, '油猴跨域请求已取消')
-      },
-      onerror(response) {
-        sendError(requestId, response?.error || response?.statusText || '油猴跨域请求失败')
-      },
-      ontimeout() {
-        sendError(requestId, '油猴跨域请求超过 15 秒')
-      },
-    })
+    let settled = false
+    let requestHandle
+    let watchdog
+
+    function finish(callback) {
+      if (settled) return
+      settled = true
+      if (watchdog) clearTimeout(watchdog)
+      callback()
+    }
+
+    watchdog = setTimeout(() => {
+      if (settled) return
+      settled = true
+      try {
+        requestHandle?.abort()
+      } catch {
+        // The timeout response below remains authoritative even if abort fails.
+      }
+      sendError(requestId, '油猴跨域请求超过 15 秒')
+    }, REQUEST_TIMEOUT_MS)
+
+    try {
+      requestHandle = GM_xmlhttpRequest({
+        method: request.method,
+        url: request.url,
+        headers: request.headers,
+        data: request.body,
+        anonymous: true,
+        timeout: REQUEST_TIMEOUT_MS,
+        onload(response) {
+          finish(() => {
+            postToPage({
+              type: 'LLMPING_USERSCRIPT_RESPONSE',
+              requestId,
+              payload: {
+                ok: true,
+                response: {
+                  ok: response.status >= 200 && response.status < 300,
+                  status: response.status,
+                  body: response.responseText || '',
+                },
+              },
+            })
+          })
+        },
+        onabort() {
+          finish(() => sendError(requestId, '油猴跨域请求已取消'))
+        },
+        onerror(response) {
+          finish(() => sendError(requestId, response?.error || response?.statusText || '油猴跨域请求失败'))
+        },
+        ontimeout() {
+          finish(() => sendError(requestId, '油猴跨域请求超过 15 秒'))
+        },
+      })
+    } catch (error) {
+      finish(() => sendError(
+        requestId,
+        `油猴跨域请求启动失败：${error instanceof Error ? error.message : '未知错误'}`,
+      ))
+    }
   }
 
   pageWindow.addEventListener('message', (event) => {

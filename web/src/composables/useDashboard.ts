@@ -46,6 +46,7 @@ export function useDashboard() {
   const autoProbeEnabled = shallowRef(false)
   const autoProbeSaving = shallowRef(false)
   const autoProbeIntervalMs = shallowRef(60_000)
+  const lastAutoProbeAt = shallowRef('')
   const globalProxyUrl = shallowRef('')
   const errorMessage = shallowRef('')
 
@@ -71,6 +72,7 @@ export function useDashboard() {
       channelSeries.value = buildSeriesByChannel(nextChannels, probes24h)
       autoProbeEnabled.value = settings.autoProbeEnabled
       autoProbeIntervalMs.value = settings.autoProbeIntervalMs
+      lastAutoProbeAt.value = settings.lastAutoProbeAt ?? ''
       globalProxyUrl.value = settings.globalProxyUrl
       if (selectedChannelId.value && !nextChannels.some((item) => item.id === selectedChannelId.value)) {
         selectedChannelId.value = 0
@@ -129,13 +131,28 @@ export function useDashboard() {
     }
   }
 
-  let autoProbeTimer: number | undefined
+  let autoProbeScheduler: Worker | undefined
 
-  function restartAutoProbeTimer() {
-    if (autoProbeTimer) window.clearInterval(autoProbeTimer)
-    autoProbeTimer = undefined
-    if (!autoProbeEnabled.value) return
-    autoProbeTimer = window.setInterval(() => void probeAll(), autoProbeIntervalMs.value)
+  function configureAutoProbeScheduler() {
+    if (!autoProbeScheduler) return
+    autoProbeScheduler.postMessage({
+      enabled: autoProbeEnabled.value,
+      intervalMs: autoProbeIntervalMs.value,
+      lastRunAt: lastAutoProbeAt.value ? new Date(lastAutoProbeAt.value).getTime() : 0,
+    })
+  }
+
+  async function runScheduledProbe() {
+    if (!autoProbeEnabled.value || batchProbing.value) return
+    lastAutoProbeAt.value = new Date().toISOString()
+    await saveSettings({
+      autoProbeEnabled: autoProbeEnabled.value,
+      autoProbeIntervalMs: autoProbeIntervalMs.value,
+      lastAutoProbeAt: lastAutoProbeAt.value,
+      globalProxyUrl: globalProxyUrl.value,
+    })
+    configureAutoProbeScheduler()
+    await probeAll()
   }
 
   async function setAutoProbe(enabled: boolean) {
@@ -145,10 +162,11 @@ export function useDashboard() {
       await saveSettings({
         autoProbeEnabled: enabled,
         autoProbeIntervalMs: autoProbeIntervalMs.value,
+        lastAutoProbeAt: lastAutoProbeAt.value,
         globalProxyUrl: globalProxyUrl.value,
       })
-      restartAutoProbeTimer()
-      if (enabled) void probeAll()
+      configureAutoProbeScheduler()
+      if (enabled) void runScheduledProbe()
     } finally {
       autoProbeSaving.value = false
     }
@@ -159,6 +177,7 @@ export function useDashboard() {
     await saveSettings({
       autoProbeEnabled: autoProbeEnabled.value,
       autoProbeIntervalMs: autoProbeIntervalMs.value,
+      lastAutoProbeAt: lastAutoProbeAt.value,
       globalProxyUrl: normalized,
     })
     globalProxyUrl.value = normalized
@@ -171,21 +190,27 @@ export function useDashboard() {
   async function importBackup(raw: unknown, mode: ImportMode) {
     const result = await restoreBackup(raw, mode)
     await loadBase()
-    restartAutoProbeTimer()
+    configureAutoProbeScheduler()
     return result
   }
 
   function handleVisibilityChange() {
-    if (document.visibilityState === 'visible' && autoProbeEnabled.value) void probeAll()
+    if (document.visibilityState === 'visible' && autoProbeEnabled.value) {
+      configureAutoProbeScheduler()
+    }
   }
 
   onMounted(async () => {
     await loadBase()
-    restartAutoProbeTimer()
+    autoProbeScheduler = new Worker(new URL('../workers/autoProbeScheduler.worker.ts', import.meta.url), { type: 'module' })
+    autoProbeScheduler.addEventListener('message', (event: MessageEvent<{ type?: string }>) => {
+      if (event.data?.type === 'due') void runScheduledProbe()
+    })
+    configureAutoProbeScheduler()
     document.addEventListener('visibilitychange', handleVisibilityChange)
   })
   onUnmounted(() => {
-    if (autoProbeTimer) window.clearInterval(autoProbeTimer)
+    autoProbeScheduler?.terminate()
     document.removeEventListener('visibilitychange', handleVisibilityChange)
   })
 

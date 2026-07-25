@@ -19,8 +19,11 @@
   --success-soft: #e1f4ec;
   --danger: #c94f4f;
   --warning: #b87919;
-  --chart-label: #6a7c78;
-  --chart-grid: #e4ebe9;
+  --chart-label: #526661;
+  --chart-grid: #c8d5d1;
+  --chart-success: #087f5b;
+  --chart-warning: #a86408;
+  --chart-danger: #c23d3d;
   --tooltip-bg: #101817;
   --tooltip-text: #ffffff;
   --empty-overlay: rgba(255, 255, 255, 0.9);
@@ -69,6 +72,9 @@ html.dark {
   --warning: #d9a14d;
   --chart-label: #9badaa;
   --chart-grid: #2b383c;
+  --chart-success: #50c99a;
+  --chart-warning: #d9a14d;
+  --chart-danger: #ee7979;
   --tooltip-bg: #edf4f2;
   --tooltip-text: #162022;
   --empty-overlay: rgba(23, 30, 32, 0.9);

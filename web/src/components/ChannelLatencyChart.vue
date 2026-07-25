@@ -136,7 +136,7 @@ function responseContent(point: SeriesPoint) {
   flex-direction: column;
   justify-content: space-between;
   padding: 0 0 1px;
-  color: var(--muted);
+  color: var(--chart-label);
   font-size: 9px;
   line-height: 1;
   text-align: right;
@@ -145,7 +145,7 @@ function responseContent(point: SeriesPoint) {
 .latency-chart__plot {
   position: relative;
   min-width: 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--chart-grid);
 }
 
 .latency-chart__gridline {
@@ -174,13 +174,15 @@ function responseContent(point: SeriesPoint) {
   align-items: flex-end;
   gap: 3px;
   padding: 0 2px;
+  z-index: 1;
 }
 
 .latency-chart__bar {
   min-width: 3px;
   flex: 1 1 0;
   border-radius: 2px 2px 0 0;
-  opacity: 0.9;
+  opacity: 1;
+  border: 1px solid rgb(0 0 0 / 12%);
   transform-origin: bottom;
   animation: bar-rise 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
   transition: height 180ms ease, opacity 180ms ease;
@@ -191,16 +193,16 @@ function responseContent(point: SeriesPoint) {
 }
 
 .latency-chart__bar--success {
-  background: var(--success);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--success) 34%, transparent);
+  background: var(--chart-success);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--chart-success) 34%, transparent);
 }
 
 .latency-chart__bar--warning {
-  background: var(--warning);
+  background: var(--chart-warning);
 }
 
 .latency-chart__bar--danger {
-  background: var(--danger);
+  background: var(--chart-danger);
 }
 
 @keyframes bar-rise {

@@ -84,10 +84,12 @@ describe('IndexedDB storage', () => {
     await saveSettings({
       autoProbeEnabled: false,
       autoProbeIntervalMs: 60_000,
+      lastAutoProbeAt: '2026-07-25T08:00:00.000Z',
       globalProxyUrl: 'https://proxy.example/?url={{url}}',
     })
 
     expect((await loadSettings()).globalProxyUrl).toContain('{{url}}')
+    expect((await loadSettings()).lastAutoProbeAt).toBe('2026-07-25T08:00:00.000Z')
     expect((await exportBackup()).settings.globalProxyUrl).toContain('{{url}}')
   })
 })

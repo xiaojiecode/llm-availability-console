@@ -78,6 +78,7 @@ export interface SeriesPoint {
 export interface MonitorSettings {
   autoProbeEnabled: boolean
   autoProbeIntervalMs: number
+  lastAutoProbeAt?: string
   globalProxyUrl: string
 }
 

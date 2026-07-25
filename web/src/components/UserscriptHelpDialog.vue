@@ -75,10 +75,20 @@ watch(() => props.open, (open) => {
   >
     <div class="help-body">
       <ol class="install-steps">
-        <li><span>1</span><p><strong>安装 Tampermonkey</strong><small>Chrome 或 Edge 中启用油猴扩展。</small></p></li>
-        <li><span>2</span><p><strong>安装下方脚本</strong><small>可直接打开安装链接，也可以复制完整脚本后新建脚本保存。</small></p></li>
+        <li><span>1</span><p><strong>启用 Tampermonkey</strong><small>扩展的网站访问权限需设为“所有网站”。</small></p></li>
+        <li><span>2</span><p><strong>确认安装脚本</strong><small>打开链接后仍需在 Tampermonkey 确认页点击“安装”。</small></p></li>
         <li><span>3</span><p><strong>刷新观测台</strong><small>页面顶部显示“油猴已连接”后即可跨域探测。</small></p></li>
       </ol>
+
+      <el-alert
+        title="安装页没有出现？"
+        type="info"
+        :closable="false"
+      >
+        <template #default>
+          若新标签页停在 Tampermonkey 的 Script Installation 中转页，请确认扩展已启用；也可以复制下方脚本，在 Tampermonkey 管理面板中新建脚本并保存。
+        </template>
+      </el-alert>
 
       <div class="script-actions">
         <div>

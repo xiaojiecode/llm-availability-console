@@ -8,6 +8,8 @@ const sourceUrl = new URL('../web/public/llmping.user.js', import.meta.url)
 function createRuntime(requestHandler = () => {}, { isolated = false } = {}) {
   const listeners = new Map()
   const posted = []
+  const timers = new Map()
+  let timerSequence = 0
   const pageWindow = {
     location: { origin: 'https://xiaojiecode.github.io' },
     addEventListener(type, listener) {
@@ -29,6 +31,14 @@ function createRuntime(requestHandler = () => {}, { isolated = false } = {}) {
     Object,
     Array,
     String,
+    setTimeout(callback) {
+      const id = ++timerSequence
+      timers.set(id, callback)
+      return id
+    },
+    clearTimeout(id) {
+      timers.delete(id)
+    },
     GM_xmlhttpRequest: requestHandler,
   })
   return {
@@ -36,6 +46,11 @@ function createRuntime(requestHandler = () => {}, { isolated = false } = {}) {
     posted,
     dispatch(data) {
       listeners.get('message')?.({ source: pageWindow, origin: pageWindow.location.origin, data })
+    },
+    runTimers() {
+      const callbacks = [...timers.values()]
+      timers.clear()
+      callbacks.forEach((callback) => callback())
     },
   }
 }
@@ -97,4 +112,49 @@ test('通过 GM_xmlhttpRequest 转发原始 HTTP 请求', async () => {
   assert.equal(responseMessage.payload.response.ok, true)
   assert.equal(responseMessage.payload.response.status, 200)
   assert.equal(responseMessage.payload.response.body, '{"ok":true}')
+})
+
+test('匿名 fetch 模式超时后主动中止底层请求', async () => {
+  const source = await readFile(sourceUrl, 'utf8')
+  let aborted = false
+  const runtime = createRuntime((details) => ({
+    abort() {
+      aborted = true
+      details.onabort()
+    },
+  }))
+  vm.runInContext(source, runtime.context)
+
+  runtime.dispatch({
+    source: 'llmping-page',
+    type: 'LLMPING_USERSCRIPT_FETCH',
+    requestId: 'probe-timeout',
+    payload: { url: 'https://api.example.test/v1/models', method: 'GET', headers: {} },
+  })
+  runtime.runTimers()
+
+  assert.equal(aborted, true)
+  const responses = runtime.posted.filter(({ message }) => message.requestId === 'probe-timeout')
+  assert.equal(responses.length, 1)
+  assert.equal(responses[0].message.payload.ok, false)
+  assert.equal(responses[0].message.payload.error, '油猴跨域请求超过 15 秒')
+})
+
+test('GM_xmlhttpRequest 同步异常会立即回传', async () => {
+  const source = await readFile(sourceUrl, 'utf8')
+  const runtime = createRuntime(() => {
+    throw new Error('permission denied')
+  })
+  vm.runInContext(source, runtime.context)
+
+  runtime.dispatch({
+    source: 'llmping-page',
+    type: 'LLMPING_USERSCRIPT_FETCH',
+    requestId: 'probe-start-error',
+    payload: { url: 'https://api.example.test/v1/models', method: 'GET', headers: {} },
+  })
+
+  const response = runtime.posted.find(({ message }) => message.requestId === 'probe-start-error')
+  assert.equal(response.message.payload.ok, false)
+  assert.equal(response.message.payload.error, '油猴跨域请求启动失败：permission denied')
 })
