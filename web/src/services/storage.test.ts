@@ -10,6 +10,7 @@ import {
   saveChannel,
   saveProbe,
   saveSettings,
+  upsertSub2ApiChannels,
 } from './storage'
 
 const defaults = defaultProviderValues('openai')
@@ -91,5 +92,66 @@ describe('IndexedDB storage', () => {
     expect((await loadSettings()).globalProxyUrl).toContain('{{url}}')
     expect((await loadSettings()).lastAutoProbeAt).toBe('2026-07-25T08:00:00.000Z')
     expect((await exportBackup()).settings.globalProxyUrl).toContain('{{url}}')
+  })
+
+  it('updates managed sub2api groups in place and disables groups no longer available', async () => {
+    const source = (groupId: number) => ({
+      type: 'sub2api' as const,
+      origin: 'https://relay.example',
+      groupId,
+      groupPlatform: 'openai',
+      remoteKeyId: groupId * 10,
+    })
+    const channel = (groupId: number, name: string) => ({
+      name,
+      provider: 'openai' as const,
+      baseUrl: 'https://relay.example',
+      apiKey: `sk-${groupId}-value`,
+      model: 'models',
+      enabled: true,
+      note: '',
+      rateMultiplier: 1,
+      proxyUrl: '',
+      requestTemplate: { ...defaults.requestTemplate, method: 'GET' as const, path: '/v1/models' },
+      source: source(groupId),
+    })
+
+    const first = await upsertSub2ApiChannels('https://relay.example', [channel(1, 'one'), channel(2, 'two')])
+    const second = await upsertSub2ApiChannels('https://relay.example', [channel(1, 'one updated')])
+    const stored = await listChannels()
+
+    expect(first.created).toBe(2)
+    expect(second.updated).toBe(1)
+    expect(second.disabled).toBe(1)
+    expect(stored.find((item) => item.source?.groupId === 1)?.id).toBe(first.channels[0].id)
+    expect(stored.find((item) => item.source?.groupId === 1)?.name).toBe('one updated')
+    expect(stored.find((item) => item.source?.groupId === 2)?.enabled).toBe(false)
+  })
+
+  it('disables all managed channels when the account no longer has available groups', async () => {
+    const managed = await saveChannel(0, {
+      name: 'managed',
+      provider: 'openai',
+      baseUrl: 'https://relay.example',
+      apiKey: 'sk-managed-value',
+      model: 'models',
+      enabled: true,
+      note: '',
+      rateMultiplier: 1,
+      proxyUrl: '',
+      requestTemplate: { ...defaults.requestTemplate, method: 'GET', path: '/v1/models' },
+      source: {
+        type: 'sub2api',
+        origin: 'https://relay.example',
+        groupId: 1,
+        groupPlatform: 'openai',
+        remoteKeyId: 10,
+      },
+    })
+
+    const result = await upsertSub2ApiChannels('https://relay.example', [])
+
+    expect(result.disabled).toBe(1)
+    expect((await monitorDb.channels.get(managed.id))?.enabled).toBe(false)
   })
 })

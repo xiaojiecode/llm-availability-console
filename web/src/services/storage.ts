@@ -86,6 +86,56 @@ export async function saveChannel(id: number, input: ChannelInput) {
   return { ...value, id: nextId } as StoredChannel
 }
 
+export async function upsertSub2ApiChannels(origin: string, inputs: ChannelInput[]) {
+  const normalized = inputs.map(normalizeChannelInput)
+  if (!origin || normalized.some((channel) => channel.source?.type !== 'sub2api' || channel.source.origin !== origin)) {
+    throw new Error('sub2api 信道来源无效')
+  }
+
+  return monitorDb.transaction('rw', monitorDb.channels, async () => {
+    const existing = await monitorDb.channels.toArray()
+    const managed = existing.filter((channel) => channel.source?.type === 'sub2api' && channel.source.origin === origin)
+    const byGroup = new Map(managed.map((channel) => [channel.source!.groupId, channel]))
+    const activeGroups = new Set<number>()
+    const saved: StoredChannel[] = []
+    let created = 0
+    let updated = 0
+    let disabled = 0
+
+    for (const channel of normalized) {
+      const groupId = channel.source!.groupId
+      activeGroups.add(groupId)
+      const current = byGroup.get(groupId)
+      const now = new Date().toISOString()
+      if (current) {
+        const next: StoredChannel = {
+          ...current,
+          ...channel,
+          id: current.id,
+          enabled: current.enabled,
+          createdAt: current.createdAt,
+          updatedAt: now,
+        }
+        await monitorDb.channels.put(next)
+        saved.push(next)
+        updated += 1
+      } else {
+        const value = { ...channel, createdAt: now, updatedAt: now }
+        const id = await monitorDb.channels.add(value as StoredChannel)
+        saved.push({ ...value, id } as StoredChannel)
+        created += 1
+      }
+    }
+
+    for (const stale of managed) {
+      if (activeGroups.has(stale.source!.groupId) || !stale.enabled) continue
+      await monitorDb.channels.update(stale.id, { enabled: false, updatedAt: new Date().toISOString() })
+      disabled += 1
+    }
+    return { channels: saved, created, updated, disabled }
+  })
+}
+
 export async function deleteChannel(id: number) {
   await monitorDb.transaction('rw', monitorDb.channels, monitorDb.probes, async () => {
     await monitorDb.probes.where('channelId').equals(id).delete()

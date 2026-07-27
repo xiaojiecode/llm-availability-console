@@ -12,6 +12,7 @@
     "test:worker": "node --test ../worker/src/index.test.mjs"
   },
   "dependencies": {
+    "@cap.js/widget": "^0.1.56",
     "@lucide/vue": "^1.25.0",
     "dexie": "4.4.4",
     "echarts": "^6.1.0",

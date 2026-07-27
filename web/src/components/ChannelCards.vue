@@ -27,9 +27,14 @@ const channelGroups = computed(() => props.mergeChannelGroups
   ? [{ key: 'all', label: '全部渠道', channels: props.channels }]
   : groupChannels(props.channels))
 
-function providerLabel(provider: Channel['provider']) {
-  if (provider === 'anthropic') return 'Claude'
-  if (provider === 'custom') return '自定义'
+function providerLabel(channel: Channel) {
+  const platform = channel.source?.type === 'sub2api' ? channel.source.groupPlatform : channel.provider
+  if (platform === 'anthropic') return 'Claude'
+  if (platform === 'gemini') return 'Gemini'
+  if (platform === 'antigravity') return 'Antigravity'
+  if (platform === 'grok') return 'Grok'
+  if (platform === 'composite') return 'Composite'
+  if (platform === 'custom') return '自定义'
   return 'OpenAI'
 }
 
@@ -102,7 +107,7 @@ function selectCard(id: number) {
               <div class="channel-title__copy">
                 <strong :title="channel.name">{{ channel.name }}</strong>
                 <div class="channel-title__meta">
-                  <span>{{ providerLabel(channel.provider) }} · {{ channel.model }} ·</span>
+                  <span>{{ providerLabel(channel) }} · {{ channel.model }} ·</span>
                   <el-tag effect="plain" size="small" type="info">{{ formatRate(channel.rateMultiplier) }}</el-tag>
                   <span :title="channel.baseUrl">· {{ channel.baseUrl }}</span>
                 </div>

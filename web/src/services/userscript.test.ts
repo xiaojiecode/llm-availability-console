@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { UserscriptBridge } from './userscript'
+import { createUserscriptFetch, UserscriptBridge } from './userscript'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -39,5 +39,27 @@ describe('userscript bridge', () => {
 
     await expect(responsePromise).resolves.toEqual({ ok: true, status: 200, body: '{"data":[]}' })
     bridge.stop()
+  })
+})
+
+describe('userscript fetch adapter', () => {
+  it('adapts standard fetch requests for CAP and other browser libraries', async () => {
+    const bridgeFetch = vi.fn().mockResolvedValue({ ok: true, status: 200, body: '{"token":"ok"}' })
+    const adaptedFetch = createUserscriptFetch({ fetch: bridgeFetch })
+
+    const response = await adaptedFetch('https://relay.example/cap/challenge', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{"answer":1}',
+    })
+
+    expect(bridgeFetch).toHaveBeenCalledWith({
+      url: 'https://relay.example/cap/challenge',
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{"answer":1}',
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ token: 'ok' })
   })
 })

@@ -159,3 +159,25 @@ export class UserscriptBridge {
 }
 
 export const userscriptBridge = new UserscriptBridge(window)
+
+export function createUserscriptFetch(
+  bridge: Pick<UserscriptBridge, 'fetch'> = userscriptBridge,
+): typeof fetch {
+  return async (input, init) => {
+    const request = input instanceof Request ? input : undefined
+    const headers = Object.fromEntries(new Headers(init?.headers ?? request?.headers).entries())
+    let body: string | undefined
+    if (typeof init?.body === 'string') body = init.body
+    else if (request && !['GET', 'HEAD'].includes(request.method)) body = await request.clone().text()
+    const response = await bridge.fetch({
+      url: request?.url ?? String(input),
+      method: init?.method ?? request?.method ?? 'GET',
+      headers,
+      body,
+    })
+    return new Response(response.body, {
+      status: response.status,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    })
+  }
+}

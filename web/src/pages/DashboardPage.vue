@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, shallowRef, useTemplateRef } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Activity, Download, Plus, RefreshCcw, RotateCw, ShieldCheck, Sparkles, Upload } from '@lucide/vue'
+import { Activity, Download, KeyRound, Plus, RefreshCcw, RotateCw, ShieldCheck, Sparkles, Upload } from '@lucide/vue'
 import ChannelDialog from '../components/ChannelDialog.vue'
 import ChannelCards from '../components/ChannelCards.vue'
 import DataImportDialog from '../components/DataImportDialog.vue'
@@ -12,9 +12,11 @@ import NetworkScene from '../components/NetworkScene.vue'
 import OverviewStats from '../components/OverviewStats.vue'
 import ProbeLogTable from '../components/ProbeLogTable.vue'
 import ProxySettingsDialog from '../components/ProxySettingsDialog.vue'
+import Sub2ApiSyncDialog from '../components/Sub2ApiSyncDialog.vue'
 import { useDashboard } from '../composables/useDashboard'
 import { useDashboardMotion } from '../composables/useDashboardMotion'
 import type { Channel, ChannelInput, ImportMode, SortField } from '../types'
+import { Sub2ApiSyncError, type Sub2ApiSyncInput, type Sub2ApiSyncResult, type Sub2ApiTwoFactorChallenge } from '../services/sub2api'
 
 const dashboard = useDashboard()
 const dialogOpen = shallowRef(false)
@@ -27,6 +29,11 @@ const mergeChannelGroups = shallowRef(true)
 const proxyDialogOpen = shallowRef(false)
 const proxySaving = shallowRef(false)
 const userscriptHelpOpen = shallowRef(false)
+const sub2ApiDialogOpen = shallowRef(false)
+const sub2ApiResult = shallowRef<Sub2ApiSyncResult>()
+const sub2ApiChallenge = shallowRef<Sub2ApiTwoFactorChallenge>()
+const sub2ApiError = shallowRef('')
+const sub2ApiRecoveryRefreshToken = shallowRef('')
 const shellRef = useTemplateRef<HTMLElement>('shell')
 
 useDashboardMotion(shellRef)
@@ -113,13 +120,14 @@ async function toggleChannel(channel: Channel, enabled: boolean) {
       name: channel.name,
       provider: channel.provider,
       baseUrl: channel.baseUrl,
-      apiKey: '',
+      apiKey: channel.apiKey,
       model: channel.model,
       enabled,
       note: channel.note,
       rateMultiplier: channel.rateMultiplier,
       proxyUrl: channel.proxyUrl,
       requestTemplate: { ...channel.requestTemplate },
+      source: channel.source,
     })
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '状态更新失败')
@@ -181,6 +189,45 @@ async function saveGlobalProxy(value: string) {
     proxySaving.value = false
   }
 }
+
+function openSub2ApiSync() {
+  sub2ApiResult.value = undefined
+  sub2ApiChallenge.value = undefined
+  sub2ApiError.value = ''
+  sub2ApiRecoveryRefreshToken.value = ''
+  sub2ApiDialogOpen.value = true
+}
+
+function resetSub2ApiSync() {
+  sub2ApiResult.value = undefined
+  sub2ApiChallenge.value = undefined
+  sub2ApiError.value = ''
+  sub2ApiRecoveryRefreshToken.value = ''
+}
+
+function closeSub2ApiSync() {
+  sub2ApiDialogOpen.value = false
+  resetSub2ApiSync()
+}
+
+async function syncSub2Api(input: Sub2ApiSyncInput) {
+  sub2ApiError.value = ''
+  sub2ApiRecoveryRefreshToken.value = ''
+  try {
+    const result = await dashboard.syncSub2Api(input)
+    if (!result) return
+    if (result.requiresTwoFactor) {
+      sub2ApiChallenge.value = result
+      return
+    }
+    sub2ApiChallenge.value = undefined
+    sub2ApiResult.value = result
+    ElMessage.success(`已同步 ${result.groupCount} 个分组并完成首次探测`)
+  } catch (error) {
+    sub2ApiError.value = error instanceof Error ? error.message : '中转站同步失败'
+    if (error instanceof Sub2ApiSyncError) sub2ApiRecoveryRefreshToken.value = error.rotatedRefreshToken
+  }
+}
 </script>
 
 <template>
@@ -232,6 +279,10 @@ async function saveGlobalProxy(value: string) {
             <el-button @click="importDialogOpen = true">
               <Upload :size="16" />
               导入
+            </el-button>
+            <el-button @click="openSub2ApiSync">
+              <KeyRound :size="16" />
+              同步中转站
             </el-button>
             <el-button @click="proxyDialogOpen = true">
               <ShieldCheck :size="16" />
@@ -377,6 +428,18 @@ async function saveGlobalProxy(value: string) {
     <UserscriptHelpDialog
       :open="userscriptHelpOpen"
       @close="userscriptHelpOpen = false"
+    />
+
+    <Sub2ApiSyncDialog
+      :open="sub2ApiDialogOpen"
+      :syncing="dashboard.syncingSub2Api.value"
+      :result="sub2ApiResult"
+      :challenge="sub2ApiChallenge"
+      :error="sub2ApiError"
+      :recovery-refresh-token="sub2ApiRecoveryRefreshToken"
+      @close="closeSub2ApiSync"
+      @reset="resetSub2ApiSync"
+      @submit="syncSub2Api"
     />
   </div>
 </template>

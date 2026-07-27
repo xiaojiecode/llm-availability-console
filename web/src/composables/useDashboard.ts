@@ -4,6 +4,7 @@ import { useUserscript } from './useUserscript'
 import { buildChannelViews, buildSeriesByChannel, buildSummary, sortChannels } from '../services/metrics'
 import { performProbe } from '../services/probe'
 import { normalizeProxyUrl } from '../services/probe'
+import { syncSub2ApiRemote, type Sub2ApiSyncInput, type Sub2ApiSyncResult } from '../services/sub2api'
 import {
   deleteChannel as deleteStoredChannel,
   exportBackup as createBackup,
@@ -16,6 +17,7 @@ import {
   saveChannel as saveStoredChannel,
   saveProbe,
   saveSettings,
+  upsertSub2ApiChannels,
 } from '../services/storage'
 
 const emptySummary: Summary = {
@@ -43,6 +45,7 @@ export function useDashboard() {
   const loading = shallowRef(false)
   const saving = shallowRef(false)
   const batchProbing = shallowRef(false)
+  const syncingSub2Api = shallowRef(false)
   const autoProbeEnabled = shallowRef(false)
   const autoProbeSaving = shallowRef(false)
   const autoProbeIntervalMs = shallowRef(60_000)
@@ -128,6 +131,44 @@ export function useDashboard() {
       await loadBase()
     } finally {
       batchProbing.value = false
+    }
+  }
+
+  async function probeChannelIds(ids: number[], concurrency = 4) {
+    let next = 0
+    async function worker() {
+      while (next < ids.length) {
+        const id = ids[next++]
+        await runProbe(id)
+      }
+    }
+    await Promise.allSettled(Array.from({ length: Math.min(concurrency, ids.length) }, worker))
+  }
+
+  async function syncSub2Api(input: Sub2ApiSyncInput) {
+    if (syncingSub2Api.value) return
+    syncingSub2Api.value = true
+    try {
+      const remote = await syncSub2ApiRemote(input)
+      if ('requiresTwoFactor' in remote) return remote
+      const local = await upsertSub2ApiChannels(remote.origin, remote.channels)
+      await loadBase()
+      await probeChannelIds(local.channels.filter((channel) => channel.enabled).map((channel) => channel.id))
+      await loadBase()
+      return {
+        requiresTwoFactor: false,
+        origin: remote.origin,
+        siteName: remote.siteName,
+        groupCount: remote.groupCount,
+        createdKeyCount: remote.createdKeyCount,
+        reusedKeyCount: remote.reusedKeyCount,
+        createdChannelCount: local.created,
+        updatedChannelCount: local.updated,
+        disabledChannelCount: local.disabled,
+        rotatedRefreshToken: remote.rotatedRefreshToken,
+      } satisfies Sub2ApiSyncResult
+    } finally {
+      syncingSub2Api.value = false
     }
   }
 
@@ -226,6 +267,7 @@ export function useDashboard() {
     loading,
     saving,
     batchProbing,
+    syncingSub2Api,
     autoProbeEnabled,
     autoProbeSaving,
     autoProbeIntervalMs,
@@ -237,6 +279,7 @@ export function useDashboard() {
     deleteChannel,
     probeChannel,
     probeAll,
+    syncSub2Api,
     setAutoProbe,
     setGlobalProxyUrl,
     checkUserscript: userscript.recheck,

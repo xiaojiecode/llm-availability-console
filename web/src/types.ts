@@ -11,6 +11,14 @@ export interface RequestTemplate {
   bodyJson: string
 }
 
+export interface Sub2ApiChannelSource {
+  type: 'sub2api'
+  origin: string
+  groupId: number
+  groupPlatform: string
+  remoteKeyId: number
+}
+
 export interface Probe {
   id: number
   channelId: number
@@ -42,6 +50,7 @@ export interface ChannelInput {
   rateMultiplier: number
   proxyUrl: string
   requestTemplate: RequestTemplate
+  source?: Sub2ApiChannelSource
 }
 
 export interface StoredChannel extends ChannelInput {
