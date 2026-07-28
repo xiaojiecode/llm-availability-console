@@ -37,7 +37,7 @@ export interface Sub2ApiSyncResult {
   siteName: string
   groupCount: number
   createdKeyCount: number
-  reusedKeyCount: number
+  deletedKeyCount: number
   createdChannelCount: number
   updatedChannelCount: number
   disabledChannelCount: number
@@ -99,7 +99,7 @@ interface RemoteSyncResult {
   siteName: string
   groupCount: number
   createdKeyCount: number
-  reusedKeyCount: number
+  deletedKeyCount: number
   rotatedRefreshToken: string
   channels: ChannelInput[]
 }
@@ -271,18 +271,6 @@ async function listAllKeys(origin: string, accessToken: string, transport?: Sub2
   return all
 }
 
-function usableKey(value: string) {
-  const key = value.trim()
-  return key.length >= 8 && !key.includes('***') && !key.includes('...')
-}
-
-async function resolveKeyValue(origin: string, accessToken: string, key: Sub2ApiKey, transport?: Sub2ApiTransport) {
-  if (usableKey(key.key)) return key
-  return requestJson<Sub2ApiKey>(origin, `/api/v1/keys/${key.id}`, {
-    headers: authHeaders(accessToken),
-  }, transport)
-}
-
 function createRequestTemplate(): RequestTemplate {
   return {
     method: 'GET',
@@ -356,25 +344,19 @@ async function syncRemoteGroups(
     listAllKeys(origin, accessToken, transport),
   ])
   const activeGroups = groups.filter((group) => group.status !== 'inactive')
-  const keysByGroup = new Map<number, Sub2ApiKey>()
-  for (const key of existingKeys) {
-    if (key.group_id && key.status === 'active' && !keysByGroup.has(key.group_id)) keysByGroup.set(key.group_id, key)
-  }
+  await mapWithConcurrency(existingKeys, 3, async (key) => {
+    await requestJson<unknown>(origin, `/api/v1/keys/${key.id}`, {
+      method: 'DELETE',
+      headers: authHeaders(accessToken),
+    }, transport)
+  })
 
-  let createdKeyCount = 0
-  let reusedKeyCount = 0
   const groupKeys = await mapWithConcurrency(activeGroups, 3, async (group) => {
-    const current = keysByGroup.get(group.id)
-    if (current) {
-      reusedKeyCount += 1
-      return { group, key: await resolveKeyValue(origin, accessToken, current, transport) }
-    }
     const key = await requestJson<Sub2ApiKey>(origin, '/api/v1/keys', {
       method: 'POST',
       headers: authHeaders(accessToken, { 'idempotency-key': idempotencyKey() }),
       body: { name: `LLM 观测台 · ${group.name}`, group_id: group.id },
     }, transport)
-    createdKeyCount += 1
     return { group, key }
   })
 
@@ -406,8 +388,8 @@ async function syncRemoteGroups(
     origin,
     siteName,
     groupCount: activeGroups.length,
-    createdKeyCount,
-    reusedKeyCount,
+    createdKeyCount: groupKeys.length,
+    deletedKeyCount: existingKeys.length,
     rotatedRefreshToken,
     channels,
   }

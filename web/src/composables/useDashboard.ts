@@ -161,7 +161,7 @@ export function useDashboard() {
         siteName: remote.siteName,
         groupCount: remote.groupCount,
         createdKeyCount: remote.createdKeyCount,
-        reusedKeyCount: remote.reusedKeyCount,
+        deletedKeyCount: remote.deletedKeyCount,
         createdChannelCount: local.created,
         updatedChannelCount: local.updated,
         disabledChannelCount: local.disabled,

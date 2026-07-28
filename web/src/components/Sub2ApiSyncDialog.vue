@@ -178,7 +178,7 @@ function resetFlow() {
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="可用分组">{{ result.groupCount }}</el-descriptions-item>
         <el-descriptions-item label="新建密钥">{{ result.createdKeyCount }}</el-descriptions-item>
-        <el-descriptions-item label="复用密钥">{{ result.reusedKeyCount }}</el-descriptions-item>
+        <el-descriptions-item label="已清理密钥">{{ result.deletedKeyCount }}</el-descriptions-item>
         <el-descriptions-item label="新增信道">{{ result.createdChannelCount }}</el-descriptions-item>
         <el-descriptions-item label="更新信道">{{ result.updatedChannelCount }}</el-descriptions-item>
         <el-descriptions-item label="停用旧分组">{{ result.disabledChannelCount }}</el-descriptions-item>
@@ -222,6 +222,13 @@ function resetFlow() {
             { label: '账号密码', value: 'account' },
           ]" block />
         </el-form-item>
+        <el-alert
+          title="同步会先删除此账号内的全部 API 密钥，再按可用分组重新创建；旧密钥会立即失效。"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="form-alert"
+        />
 
         <el-form-item v-if="form.authMode === 'refresh_token'" label="Refresh Token">
           <el-input

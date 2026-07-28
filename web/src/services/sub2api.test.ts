@@ -11,7 +11,7 @@ describe('sub2api sync', () => {
     expect(normalizeSub2ApiOrigin('lucen.plus/dashboard')).toBe('https://lucen.plus')
   })
 
-  it('rotates a refresh token, reuses keys, creates missing group keys, and builds model probes', async () => {
+  it('rotates a refresh token, clears all existing keys, recreates group keys, and builds model probes', async () => {
     const requests: UserscriptFetchInput[] = []
     const fetch = vi.fn(async (input: UserscriptFetchInput) => {
       requests.push(input)
@@ -32,8 +32,16 @@ describe('sub2api sync', () => {
           pages: 1,
         })
       }
+      if (path === '/api/v1/keys/11' && input.method === 'DELETE') return envelope({ message: 'deleted' })
       if (path === '/api/v1/keys' && input.method === 'POST') {
-        return envelope({ id: 22, key: 'sk-created', name: 'created', group_id: 2, status: 'active' })
+        const groupId = JSON.parse(input.body ?? '{}').group_id
+        return envelope({
+          id: groupId === 1 ? 21 : 22,
+          key: groupId === 1 ? 'sk-created-claude' : 'sk-created-codex',
+          name: 'created',
+          group_id: groupId,
+          status: 'active',
+        })
       }
       if (path === '/v1/models') {
         const auth = input.headers.authorization
@@ -42,7 +50,7 @@ describe('sub2api sync', () => {
           status: 200,
           body: JSON.stringify({
             object: 'list',
-            data: [{ id: auth.endsWith('existing') ? 'claude-sonnet-4' : 'gpt-5.1-codex' }],
+            data: [{ id: auth.endsWith('claude') ? 'claude-sonnet-4' : 'gpt-5.1-codex' }],
           }),
         }
       }
@@ -58,12 +66,16 @@ describe('sub2api sync', () => {
     expect('requiresTwoFactor' in result).toBe(false)
     if ('requiresTwoFactor' in result) return
     expect(result.rotatedRefreshToken).toBe('rotated')
-    expect(result.createdKeyCount).toBe(1)
-    expect(result.reusedKeyCount).toBe(1)
+    expect(result.createdKeyCount).toBe(2)
+    expect(result.deletedKeyCount).toBe(1)
     expect(result.channels.map((channel) => channel.model)).toEqual(['claude-sonnet-4', 'gpt-5.1-codex'])
     expect(result.channels[1].rateMultiplier).toBe(0.8)
     expect(result.channels.every((channel) => channel.requestTemplate.path === '/v1/models')).toBe(true)
     expect(requests.find((request) => request.method === 'POST' && request.url.endsWith('/api/v1/keys'))?.headers['idempotency-key']).toBeTruthy()
+    const deleteIndex = requests.findIndex((request) => request.method === 'DELETE')
+    const createIndex = requests.findIndex((request) => request.method === 'POST' && request.url.endsWith('/api/v1/keys'))
+    expect(deleteIndex).toBeGreaterThan(-1)
+    expect(createIndex).toBeGreaterThan(deleteIndex)
   })
 
   it('returns a 2FA challenge before creating keys', async () => {
@@ -159,7 +171,7 @@ describe('sub2api sync', () => {
     expect(result.rotatedRefreshToken).toBe('2fa-refresh')
   })
 
-  it('falls back to group rates and resolves a masked existing key from its detail endpoint', async () => {
+  it('falls back to group rates after replacing an existing masked key', async () => {
     const requests: UserscriptFetchInput[] = []
     const fetch = vi.fn(async (input: UserscriptFetchInput) => {
       requests.push(input)
@@ -172,7 +184,7 @@ describe('sub2api sync', () => {
       if (path === '/api/v1/groups/rates') {
         return { ok: false, status: 404, body: JSON.stringify({ code: 404, message: 'not found' }) }
       }
-      if (path === '/api/v1/keys') {
+      if (path === '/api/v1/keys' && input.method === 'GET') {
         return envelope({
           items: [{ id: 70, key: 'sk-12...89', name: 'masked', group_id: 7, status: 'active' }],
           total: 1,
@@ -181,8 +193,9 @@ describe('sub2api sync', () => {
           pages: 1,
         })
       }
-      if (path === '/api/v1/keys/70') {
-        return envelope({ id: 70, key: 'sk-full-existing-key', name: 'masked', group_id: 7, status: 'active' })
+      if (path === '/api/v1/keys/70' && input.method === 'DELETE') return envelope({ message: 'deleted' })
+      if (path === '/api/v1/keys' && input.method === 'POST') {
+        return envelope({ id: 71, key: 'sk-new-group-key', name: 'created', group_id: 7, status: 'active' })
       }
       if (path === '/v1/models') return { ok: false, status: 404, body: 'not found' }
       throw new Error(`Unexpected request: ${input.method} ${path}`)
@@ -196,14 +209,49 @@ describe('sub2api sync', () => {
 
     expect('requiresTwoFactor' in result).toBe(false)
     if ('requiresTwoFactor' in result) return
-    expect(result.reusedKeyCount).toBe(1)
-    expect(result.createdKeyCount).toBe(0)
+    expect(result.deletedKeyCount).toBe(1)
+    expect(result.createdKeyCount).toBe(1)
     expect(result.channels[0]).toMatchObject({
-      apiKey: 'sk-full-existing-key',
+      apiKey: 'sk-new-group-key',
       model: 'gemini-models',
       rateMultiplier: 1.6,
     })
-    expect(requests.some((request) => request.url.endsWith('/api/v1/keys/70'))).toBe(true)
+    expect(requests.some((request) => request.method === 'DELETE' && request.url.endsWith('/api/v1/keys/70'))).toBe(true)
+  })
+
+  it('stops before creating group keys when clearing an existing key fails', async () => {
+    const requests: UserscriptFetchInput[] = []
+    const fetch = vi.fn(async (input: UserscriptFetchInput) => {
+      requests.push(input)
+      const path = new URL(input.url).pathname
+      if (path === '/api/v1/settings/public') return envelope({ site_name: 'Relay' })
+      if (path === '/api/v1/auth/refresh') return envelope({ access_token: 'access' })
+      if (path === '/api/v1/groups/available') {
+        return envelope([{ id: 1, name: 'Codex', platform: 'openai', rate_multiplier: 1, status: 'active' }])
+      }
+      if (path === '/api/v1/groups/rates') return envelope(null)
+      if (path === '/api/v1/keys' && input.method === 'GET') {
+        return envelope({
+          items: [{ id: 11, key: 'sk-existing', name: 'existing', group_id: null, status: 'inactive' }],
+          total: 1,
+          page: 1,
+          page_size: 500,
+          pages: 1,
+        })
+      }
+      if (path === '/api/v1/keys/11' && input.method === 'DELETE') {
+        return { ok: false, status: 500, body: JSON.stringify({ code: 500, message: 'delete failed' }) }
+      }
+      throw new Error(`Unexpected request: ${input.method} ${path}`)
+    })
+
+    await expect(syncSub2ApiRemote({
+      site: 'relay.example',
+      authMode: 'refresh_token',
+      refreshToken: 'refresh',
+    }, { fetch })).rejects.toThrow('delete failed')
+
+    expect(requests.some((request) => request.method === 'POST' && request.url.endsWith('/api/v1/keys'))).toBe(false)
   })
 
   it('preserves a rotated refresh token when downstream sync fails', async () => {
